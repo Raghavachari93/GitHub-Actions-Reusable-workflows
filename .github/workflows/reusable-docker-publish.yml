@@ -1,0 +1,82 @@
+name: reusable-docker-publish
+
+on:
+  workflow_call:
+    inputs:
+      context:
+        description: 'Build context'
+        required: false
+        default: '.'
+        type: string
+      image:
+        description: 'Image name without registry (e.g., user/app)'
+        required: true
+        type: string
+      tag:
+        description: 'Image tag'
+        required: false
+        default: latest
+        type: string
+      registry:
+        description: 'dockerhub|ghcr'
+        required: false
+        default: dockerhub
+        type: string
+      push:
+        description: 'Actually push the image?'
+        required: false
+        default: true
+        type: boolean
+    secrets:
+      DOCKERHUB_USERNAME:
+        required: false
+      DOCKERHUB_TOKEN:
+        required: false
+      GHCR_TOKEN:
+        required: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set registry vars
+        id: reg
+        run: |
+          if [ "${{ inputs.registry }}" = "ghcr" ]; then
+            echo "REG=ghcr.io" >> $GITHUB_ENV
+            echo "USER=${{ github.repository_owner }}" >> $GITHUB_ENV
+          else
+            echo "REG=docker.io" >> $GITHUB_ENV
+            echo "USER=${{ secrets.DOCKERHUB_USERNAME }}" >> $GITHUB_ENV
+          fi
+          echo "REF=${{ env.REG }}/${{ env.USER }}/${{ inputs.image }}:${{ inputs.tag }}" >> $GITHUB_ENV
+
+      - name: Login (Docker Hub)
+        if: ${{ inputs.registry == 'dockerhub' }}
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Login (GHCR)
+        if: ${{ inputs.registry == 'ghcr' }}
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GHCR_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and (maybe) push
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ inputs.context }}
+          push: ${{ inputs.push }}
+          tags: ${{ env.REF }}
+          cache-from: type=registry,ref=${{ env.REF }}
+          cache-to: type=inline
+

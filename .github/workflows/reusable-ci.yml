@@ -1,0 +1,106 @@
+name: reusable-ci
+
+on:
+  workflow_call:
+    inputs:
+      language:
+        description: 'Which language to test (node|python)'
+        required: true
+        type: string
+      node-version:
+        description: 'Node version (if language=node)'
+        required: false
+        default: '20'
+        type: string
+      python-version:
+        description: 'Python version (if language=python)'
+        required: false
+        default: '3.11'
+        type: string
+      working-directory:
+        description: 'Path to the app folder'
+        required: true
+        type: string
+      run-tests:
+        description: 'Whether to run tests'
+        required: false
+        default: true
+        type: boolean
+      use-cache:
+        description: 'Enable dependency caching'
+        required: false
+        default: true
+        type: boolean
+    outputs:
+      tests-ran:
+        description: 'Did we run tests?'
+        value: ${{ jobs.ci.outputs.tests_ran }}
+      language:
+        description: 'Echo language'
+        value: ${{ inputs.language }}
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    outputs:
+      tests_ran: ${{ steps.set-out.outputs.tests_ran }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set working dir
+        id: wd
+        run: echo "WD=${{ inputs.working-directory }}" >> $GITHUB_ENV
+
+      # ---------- Node path ----------
+      - name: Setup Node
+        if: ${{ inputs.language == 'node' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: ${{ inputs.use-cache && 'npm' || '' }}
+          cache-dependency-path: ${{ env.WD }}/package-lock.json
+
+      - name: Install (Node)
+        if: ${{ inputs.language == 'node' }}
+        working-directory: ${{ env.WD }}
+        run: npm ci
+
+      - name: Test (Node)
+        if: ${{ inputs.language == 'node' && inputs.run-tests }}
+        working-directory: ${{ env.WD }}
+        run: npm test --silent
+
+      # ---------- Python path ----------
+      - name: Setup Python
+        if: ${{ inputs.language == 'python' }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ inputs.python-version }}
+
+      - name: Cache pip
+        if: ${{ inputs.language == 'python' && inputs.use-cache }}
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ runner.os }}-${{ inputs.python-version }}-${{ hashFiles(format('{0}/**/requirements*.txt', env.WD)) }}
+          restore-keys: |
+            pip-${{ runner.os }}-${{ inputs.python-version }}-
+
+      - name: Install (Python)
+        if: ${{ inputs.language == 'python' }}
+        working-directory: ${{ env.WD }}
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pytest
+
+      - name: Test (Python)
+        if: ${{ inputs.language == 'python' && inputs.run-tests }}
+        working-directory: ${{ env.WD }}
+        run: pytest -q
+
+      - name: Set output
+        id: set-out
+        run: echo "tests_ran=${{ inputs.run-tests }}" >> $GITHUB_OUTPUT
+

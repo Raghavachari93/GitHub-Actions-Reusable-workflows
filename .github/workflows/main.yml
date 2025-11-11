@@ -1,0 +1,48 @@
+name: demo-caller
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  matrix-ci:
+    name: Matrix CI (${{ matrix.lang }})
+    strategy:
+      matrix:
+        include:
+          - lang: node
+            wd: app-node
+            node: "20"
+          - lang: python
+            wd: app-python
+            py: "3.11"
+    uses: ./.github/workflows/reusable-ci.yml
+    with:
+      language: ${{ matrix.lang }}
+      working-directory: ${{ matrix.wd }}
+      node-version: ${{ matrix.node || '20' }}
+      python-version: ${{ matrix.py || '3.11' }}
+      run-tests: true
+      use-cache: true
+
+  docker_publish:
+    name: Publish image (Docker Hub)
+    needs: matrix-ci
+    if: github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/reusable-docker-publish.yml
+    with:
+      context: .
+      image: actions-reusable-demo
+      tag: ${{ github.sha }}
+      registry: dockerhub
+      push: true
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKER_PASSWORD }}
+
