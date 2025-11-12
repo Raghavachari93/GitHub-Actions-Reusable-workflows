@@ -43,8 +43,7 @@ jobs:
       registry: dockerhub
       push: true
     secrets:
-      # Map your repository secret names into the reusable workflow's expected secret names.
-      # Adjust the right-hand side to match the secret names you set in the repo.
+      # map your repo secret names -> reusable's expected secret names
       DOCKERHUB_USERNAME: ${{ secrets.DOCKER_USERNAME }}
       DOCKERHUB_TOKEN:    ${{ secrets.DOCKER_PASSWORD }}
 

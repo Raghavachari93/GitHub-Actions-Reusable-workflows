@@ -42,8 +42,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set registry vars (shell)
-        id: set-reg
+      - name: Compute registry variables
+        id: setenv
         run: |
           if [ "${{ inputs.registry }}" = "ghcr" ]; then
             REG="ghcr.io"
@@ -55,32 +55,34 @@ jobs:
           echo "REG=${REG}" >> $GITHUB_ENV
           echo "USER=${USER}" >> $GITHUB_ENV
           echo "REF=${REG}/${USER}/${{ inputs.image }}:${{ inputs.tag }}" >> $GITHUB_ENV
+          echo "Computed REF=${REG}/${USER}/${{ inputs.image }}:${{ inputs.tag }}"
 
-      - name: Debug: show registry & secret presence
+      - name: Debug: show registry & secrets presence
         run: |
           echo "inputs.registry=${{ inputs.registry }}"
-          echo "REG=$REG"
-          echo "USER=$USER"
-          echo "REF=$REF"
-          echo "push=${{ inputs.push }}"
-          if [ -z "${{ secrets.DOCKERHUB_USERNAME }}" ]; then echo "DOCKERHUB_USERNAME: EMPTY"; else echo "DOCKERHUB_USERNAME: SET"; fi
-          if [ -z "${{ secrets.DOCKERHUB_TOKEN }}" ]; then echo "DOCKERHUB_TOKEN: EMPTY"; else echo "DOCKERHUB_TOKEN: SET"; fi
-          if [ -z "${{ secrets.GHCR_TOKEN }}" ]; then echo "GHCR_TOKEN: EMPTY"; else echo "GHCR_TOKEN: SET"; fi
+          echo "env.REG=$REG"
+          echo "env.USER=$USER"
+          echo "env.REF=$REF"
+          echo "inputs.push=${{ inputs.push }}"
+          if [ -z "${{ secrets.DOCKERHUB_USERNAME }}" ]; then echo "DOCKERHUB_USERNAME=EMPTY"; else echo "DOCKERHUB_USERNAME=SET"; fi
+          if [ -z "${{ secrets.DOCKERHUB_TOKEN }}" ]; then echo "DOCKERHUB_TOKEN=EMPTY"; else echo "DOCKERHUB_TOKEN=SET"; fi
+          if [ -z "${{ secrets.GHCR_TOKEN }}" ]; then echo "GHCR_TOKEN=EMPTY"; else echo "GHCR_TOKEN=SET"; fi
 
-      - name: Fail early if push requested to Docker Hub but secrets missing
+      - name: Validate push credentials (shell)
         run: |
-          if [ "${{ inputs.registry }}" = "dockerhub" ] && [ "${{ inputs.push }}" = "true" ]; then
+          # If push requested to Docker Hub, ensure required secrets exist
+          if [ "${{ inputs.push }}" = "true" ] && [ "${{ inputs.registry }}" = "dockerhub" ]; then
             if [ -z "${{ secrets.DOCKERHUB_USERNAME }}" ] || [ -z "${{ secrets.DOCKERHUB_TOKEN }}" ]; then
               echo "::error ::Docker Hub push requested but DOCKERHUB_USERNAME/DOCKERHUB_TOKEN secrets are missing."
+              echo "::error ::Set repository secrets DOCKERHUB_USERNAME and DOCKERHUB_TOKEN (or switch to registry=ghcr)."
               exit 1
             fi
           fi
 
       - name: Login to registry (shell)
         run: |
-          # Only attempt docker login when push is requested
           if [ "${{ inputs.push }}" != "true" ]; then
-            echo "Push not requested; skipping login."
+            echo "Push not requested — skipping login."
             exit 0
           fi
 
@@ -88,26 +90,25 @@ jobs:
             echo "Logging in to Docker Hub..."
             echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login docker.io -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
           elif [ "${{ inputs.registry }}" = "ghcr" ]; then
-            # GHCR: prefer GHCR_TOKEN if set, else fall back to GITHUB_TOKEN
             TOKEN="${{ secrets.GHCR_TOKEN }}"
             if [ -z "$TOKEN" ]; then
               TOKEN="${{ secrets.GITHUB_TOKEN }}"
             fi
             if [ -z "$TOKEN" ]; then
-              echo "::warning ::No token found for GHCR; push may fail."
+              echo "::warning ::No GHCR token found; push may fail."
             else
               echo "Logging in to GHCR..."
               echo "$TOKEN" | docker login ghcr.io -u "${{ github.repository_owner }}" --password-stdin
             fi
           else
-            echo "::error ::Unknown registry: ${{ inputs.registry }}"
+            echo "::error ::Unknown registry '${{ inputs.registry }}'"
             exit 1
           fi
 
       - name: Set up Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build and (maybe) push
+      - name: Build and push (build-push-action)
         uses: docker/build-push-action@v5
         with:
           context: ${{ inputs.context }}
