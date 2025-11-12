@@ -42,22 +42,23 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set registry vars
-        id: reg
+      - name: Set registry vars (shell)
+        id: set-reg
         run: |
           if [ "${{ inputs.registry }}" = "ghcr" ]; then
-            echo "REG=ghcr.io" >> $GITHUB_ENV
-            echo "USER=${{ github.repository_owner }}" >> $GITHUB_ENV
+            REG="ghcr.io"
+            USER="${{ github.repository_owner }}"
           else
-            echo "REG=docker.io" >> $GITHUB_ENV
-            echo "USER=${{ secrets.DOCKERHUB_USERNAME }}" >> $GITHUB_ENV
+            REG="docker.io"
+            USER="${{ secrets.DOCKERHUB_USERNAME }}"
           fi
-          # construct REF using the shell variables REG and USER
+          echo "REG=${REG}" >> $GITHUB_ENV
+          echo "USER=${USER}" >> $GITHUB_ENV
           echo "REF=${REG}/${USER}/${{ inputs.image }}:${{ inputs.tag }}" >> $GITHUB_ENV
 
-      - name: Debug: show registry config (presence only)
+      - name: Debug: show registry & secret presence
         run: |
-          echo "registry input: ${{ inputs.registry }}"
+          echo "inputs.registry=${{ inputs.registry }}"
           echo "REG=$REG"
           echo "USER=$USER"
           echo "REF=$REF"
@@ -66,31 +67,42 @@ jobs:
           if [ -z "${{ secrets.DOCKERHUB_TOKEN }}" ]; then echo "DOCKERHUB_TOKEN: EMPTY"; else echo "DOCKERHUB_TOKEN: SET"; fi
           if [ -z "${{ secrets.GHCR_TOKEN }}" ]; then echo "GHCR_TOKEN: EMPTY"; else echo "GHCR_TOKEN: SET"; fi
 
-      - name: Fail early if pushing to Docker Hub but secrets are missing
+      - name: Fail early if push requested to Docker Hub but secrets missing
         run: |
-          # If caller requested a Docker Hub push, ensure the secrets exist.
           if [ "${{ inputs.registry }}" = "dockerhub" ] && [ "${{ inputs.push }}" = "true" ]; then
             if [ -z "${{ secrets.DOCKERHUB_USERNAME }}" ] || [ -z "${{ secrets.DOCKERHUB_TOKEN }}" ]; then
-              echo "::error ::Push to Docker Hub requested but DOCKERHUB_USERNAME/DOCKERHUB_TOKEN secrets are not set."
-              echo "::error ::Set repository secrets DOCKERHUB_USERNAME and DOCKERHUB_TOKEN, or switch to registry=ghcr and use GITHUB_TOKEN."
+              echo "::error ::Docker Hub push requested but DOCKERHUB_USERNAME/DOCKERHUB_TOKEN secrets are missing."
               exit 1
             fi
           fi
 
-      - name: Login (Docker Hub)
-        if: ${{ inputs.registry == 'dockerhub' && inputs.push == 'true' }}
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Login to registry (shell)
+        run: |
+          # Only attempt docker login when push is requested
+          if [ "${{ inputs.push }}" != "true" ]; then
+            echo "Push not requested; skipping login."
+            exit 0
+          fi
 
-      - name: Login (GHCR)
-        if: ${{ inputs.registry == 'ghcr' && inputs.push == 'true' }}
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.repository_owner }}
-          password: ${{ secrets.GHCR_TOKEN || secrets.GITHUB_TOKEN }}
+          if [ "${{ inputs.registry }}" = "dockerhub" ]; then
+            echo "Logging in to Docker Hub..."
+            echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login docker.io -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+          elif [ "${{ inputs.registry }}" = "ghcr" ]; then
+            # GHCR: prefer GHCR_TOKEN if set, else fall back to GITHUB_TOKEN
+            TOKEN="${{ secrets.GHCR_TOKEN }}"
+            if [ -z "$TOKEN" ]; then
+              TOKEN="${{ secrets.GITHUB_TOKEN }}"
+            fi
+            if [ -z "$TOKEN" ]; then
+              echo "::warning ::No token found for GHCR; push may fail."
+            else
+              echo "Logging in to GHCR..."
+              echo "$TOKEN" | docker login ghcr.io -u "${{ github.repository_owner }}" --password-stdin
+            fi
+          else
+            echo "::error ::Unknown registry: ${{ inputs.registry }}"
+            exit 1
+          fi
 
       - name: Set up Buildx
         uses: docker/setup-buildx-action@v3

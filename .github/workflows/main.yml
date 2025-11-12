@@ -32,7 +32,7 @@ jobs:
       use-cache: true
 
   docker_publish:
-    name: Publish image (Docker Hub)
+    name: Publish image
     needs: matrix-ci
     if: github.ref == 'refs/heads/main'
     uses: ./.github/workflows/reusable-docker-publish.yml
@@ -44,7 +44,7 @@ jobs:
       push: true
     secrets:
       # Map your repository secret names into the reusable workflow's expected secret names.
-      # If your repo secrets are DOCKER_USERNAME and DOCKER_PASSWORD, use the mapping below.
+      # Adjust the right-hand side to match the secret names you set in the repo.
       DOCKERHUB_USERNAME: ${{ secrets.DOCKER_USERNAME }}
       DOCKERHUB_TOKEN:    ${{ secrets.DOCKER_PASSWORD }}
 
