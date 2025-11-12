@@ -133,12 +133,18 @@ jobs:
             pip install pytest
           fi
 
-      - name: Test (Python)
+      - name: Test (Python) — ensure app on PYTHONPATH
         if: ${{ inputs.language == 'python' && inputs.run-tests }}
         working-directory: ${{ inputs.working-directory }}
-        run: pytest -q
+        run: |
+          echo "Running pytest from: $(pwd)"
+          echo "Listing working dir:"
+          ls -la
+          echo "Ensuring working dir is on PYTHONPATH and running pytest"
+          PYTHONPATH="${{ inputs.working-directory }}:${PYTHONPATH}" pytest -q
 
       - name: Set output
         id: set-out
         run: echo "tests_ran=${{ inputs.run-tests }}" >> $GITHUB_OUTPUT
+
 
