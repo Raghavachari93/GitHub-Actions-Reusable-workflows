@@ -52,7 +52,7 @@ jobs:
             echo "REG=docker.io" >> $GITHUB_ENV
             echo "USER=${{ secrets.DOCKERHUB_USERNAME }}" >> $GITHUB_ENV
           fi
-          echo "REF=${{ env.REG }}/${{ env.USER }}/${{ inputs.image }}:${{ inputs.tag }}" >> $GITHUB_ENV
+          echo "REF=${REG}/${USER}/${{ inputs.image }}:${{ inputs.tag }}" >> $GITHUB_ENV
 
       - name: Debug: show registry config
         run: |
@@ -61,27 +61,24 @@ jobs:
           echo "USER=$USER"
           echo "REF=$REF"
           echo "push=${{ inputs.push }}"
-          # note: secret values are masked by GitHub in logs; we only show presence
           if [ -z "${{ secrets.DOCKERHUB_USERNAME }}" ]; then echo "DOCKERHUB_USERNAME: EMPTY"; else echo "DOCKERHUB_USERNAME: SET"; fi
           if [ -z "${{ secrets.DOCKERHUB_TOKEN }}" ]; then echo "DOCKERHUB_TOKEN: EMPTY"; else echo "DOCKERHUB_TOKEN: SET"; fi
           if [ -z "${{ secrets.GHCR_TOKEN }}" ]; then echo "GHCR_TOKEN: EMPTY"; else echo "GHCR_TOKEN: SET"; fi
 
-      # Docker Hub login: only when registry=dockerhub AND secrets present
       - name: Login (Docker Hub)
-        if: ${{ inputs.registry == 'dockerhub' && secrets.DOCKERHUB_USERNAME != '' && secrets.DOCKERHUB_TOKEN != '' }}
+        if: ${{ inputs.registry == 'dockerhub' && secrets.DOCKERHUB_USERNAME && secrets.DOCKERHUB_TOKEN }}
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Fail if Docker Hub push requested but no Docker Hub secrets available
-        if: ${{ inputs.registry == 'dockerhub' && inputs.push == 'true' && (secrets.DOCKERHUB_USERNAME == '' || secrets.DOCKERHUB_TOKEN == '') }}
+        if: ${{ inputs.registry == 'dockerhub' && inputs.push == 'true' && (!secrets.DOCKERHUB_USERNAME || !secrets.DOCKERHUB_TOKEN) }}
         run: |
           echo "::error ::Push to Docker Hub requested but DOCKERHUB_USERNAME/DOCKERHUB_TOKEN secrets are not set."
           echo "::error ::Set repository secrets DOCKERHUB_USERNAME and DOCKERHUB_TOKEN, or switch to registry=ghcr and use GITHUB_TOKEN."
           exit 1
 
-      # GHCR login: uses GHCR_TOKEN when provided, otherwise falls back to GITHUB_TOKEN
       - name: Login (GHCR)
         if: ${{ inputs.registry == 'ghcr' }}
         uses: docker/login-action@v3

@@ -2,9 +2,9 @@ name: demo-caller
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
 
 permissions:
   contents: read
@@ -43,14 +43,8 @@ jobs:
       registry: dockerhub
       push: true
     secrets:
-      # Map your repo-level secret names into the reusable's expected secret names
-      # If you named your secrets DOCKER_USERNAME and DOCKER_PASSWORD in the repo, use:
+      # Map your repository secret names into the reusable workflow's expected secret names.
+      # If your repo secrets are named DOCKER_USERNAME and DOCKER_PASSWORD, use the mapping below.
       DOCKERHUB_USERNAME: ${{ secrets.DOCKER_USERNAME }}
       DOCKERHUB_TOKEN:    ${{ secrets.DOCKER_PASSWORD }}
-
-    # Ensure the job has permission to push to packages if using GHCR:
-    permissions:
-      contents: read
-      packages: write
-
 
