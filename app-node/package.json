@@ -1,21 +1,13 @@
 {
   "name": "actions-reusable-demo",
   "version": "1.0.0",
-  "lockfileVersion": 3,
-  "requires": true,
-  "packages": {
-    "": {
-      "name": "actions-reusable-demo",
-      "version": "1.0.0",
-      "license": "ISC",
-      "dependencies": {},
-      "devDependencies": {},
-      "engines": {
-        "node": ">=18"
-      }
-    }
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
   },
-  "dependencies": {},
-  "devDependencies": {}
+  "devDependencies": {},
+  "engines": {
+    "node": ">=18"
+  }
 }
 
