@@ -44,7 +44,7 @@ jobs:
       push: true
     secrets:
       # Map your repository secret names into the reusable workflow's expected secret names.
-      # Example: if your repo secrets are DOCKER_USERNAME and DOCKER_PASSWORD:
+      # If your repo secrets are DOCKER_USERNAME and DOCKER_PASSWORD, use the mapping below.
       DOCKERHUB_USERNAME: ${{ secrets.DOCKER_USERNAME }}
       DOCKERHUB_TOKEN:    ${{ secrets.DOCKER_PASSWORD }}
 

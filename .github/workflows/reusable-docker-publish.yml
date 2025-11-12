@@ -52,10 +52,10 @@ jobs:
             echo "REG=docker.io" >> $GITHUB_ENV
             echo "USER=${{ secrets.DOCKERHUB_USERNAME }}" >> $GITHUB_ENV
           fi
-          # Use shell vars REG and USER to construct REF
+          # construct REF using the shell variables REG and USER
           echo "REF=${REG}/${USER}/${{ inputs.image }}:${{ inputs.tag }}" >> $GITHUB_ENV
 
-      - name: Debug: show registry config
+      - name: Debug: show registry config (presence only)
         run: |
           echo "registry input: ${{ inputs.registry }}"
           echo "REG=$REG"
@@ -66,22 +66,26 @@ jobs:
           if [ -z "${{ secrets.DOCKERHUB_TOKEN }}" ]; then echo "DOCKERHUB_TOKEN: EMPTY"; else echo "DOCKERHUB_TOKEN: SET"; fi
           if [ -z "${{ secrets.GHCR_TOKEN }}" ]; then echo "GHCR_TOKEN: EMPTY"; else echo "GHCR_TOKEN: SET"; fi
 
+      - name: Fail early if pushing to Docker Hub but secrets are missing
+        run: |
+          # If caller requested a Docker Hub push, ensure the secrets exist.
+          if [ "${{ inputs.registry }}" = "dockerhub" ] && [ "${{ inputs.push }}" = "true" ]; then
+            if [ -z "${{ secrets.DOCKERHUB_USERNAME }}" ] || [ -z "${{ secrets.DOCKERHUB_TOKEN }}" ]; then
+              echo "::error ::Push to Docker Hub requested but DOCKERHUB_USERNAME/DOCKERHUB_TOKEN secrets are not set."
+              echo "::error ::Set repository secrets DOCKERHUB_USERNAME and DOCKERHUB_TOKEN, or switch to registry=ghcr and use GITHUB_TOKEN."
+              exit 1
+            fi
+          fi
+
       - name: Login (Docker Hub)
-        if: ${{ inputs.registry == 'dockerhub' && secrets.DOCKERHUB_USERNAME != '' && secrets.DOCKERHUB_TOKEN != '' }}
+        if: ${{ inputs.registry == 'dockerhub' && inputs.push == 'true' }}
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Fail if Docker Hub push requested but no Docker Hub secrets available
-        if: ${{ inputs.registry == 'dockerhub' && inputs.push == 'true' && (secrets.DOCKERHUB_USERNAME == '' || secrets.DOCKERHUB_TOKEN == '') }}
-        run: |
-          echo "::error ::Push to Docker Hub requested but DOCKERHUB_USERNAME/DOCKERHUB_TOKEN secrets are not set."
-          echo "::error ::Set repository secrets DOCKERHUB_USERNAME and DOCKERHUB_TOKEN, or switch to registry=ghcr and use GITHUB_TOKEN."
-          exit 1
-
       - name: Login (GHCR)
-        if: ${{ inputs.registry == 'ghcr' }}
+        if: ${{ inputs.registry == 'ghcr' && inputs.push == 'true' }}
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
